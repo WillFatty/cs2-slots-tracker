@@ -18,8 +18,6 @@
       <PrivateAssets>none</PrivateAssets>
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
-    <PackageReference Include="Dapper" Version="2.1.24" />
-    <PackageReference Include="MySqlConnector" Version="2.3.3" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,7 +1,8 @@
 {
-    "Host": "YOUR_DATABASE_HOST",
-    "Port": 3306,
-    "Database": "YOUR_DATABASE_NAME",
-    "User": "YOUR_DATABASE_USERNAME",
-    "Password": "YOUR_DATABASE_PASSWORD"
+    "EnableApiSync": true,
+    "ApiEndpoint": "https://admin.affinitycs2.com/api/stats",
+    "ApiKey": "AffinityCS2APIKey2024",
+    "ServerId": "server1",
+    "ServerName": "",
+    "ApiSyncIntervalSeconds": 60
 }

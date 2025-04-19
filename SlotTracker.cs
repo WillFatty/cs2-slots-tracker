@@ -6,10 +6,12 @@ using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Cvars;
 using CounterStrikeSharp.API.Modules.Utils;
 using CounterStrikeSharp.API.Modules.Timers;
-using Dapper;
-using MySqlConnector;
-using SlotTracker.Models;
 using System.Text.Json;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+using System.Net.Http.Json;
+using SlotTracker.Config;
 
 namespace SlotTracker;
 
@@ -20,15 +22,33 @@ public class SlotTracker : BasePlugin
     public override string ModuleVersion => "1.0.0";
     public override string ModuleAuthor => "agasking1337";
 
-    private DatabaseConfig _config = null!;
+    private Config.ServerConfig _config = null!;
     private int _serverSlots;
     private bool _updatePending = false;
+    private string _currentMap = string.Empty;
+    private string _sessionId = Guid.NewGuid().ToString(); // Unique session ID for this server instance
+    private HttpClient _httpClient = null!;
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _apiSyncTimer;
+    
+    // In-memory state tracking
+    private int _tRounds = 0;
+    private int _ctRounds = 0;
+    private int _playerCount = 0;
+    private List<PlayerInfo> _tPlayers = new List<PlayerInfo>();
+    private List<PlayerInfo> _ctPlayers = new List<PlayerInfo>();
 
-    public class ServerStats
+    public class PlayerInfo
     {
-        public DateTime Timestamp { get; set; }
-        public int PlayerCount { get; set; }
-        public int ServerSlots { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string SteamId { get; set; } = string.Empty;
+        public string Team { get; set; } = string.Empty;
+        public int Kills { get; set; } = 0;
+        public int Deaths { get; set; } = 0;
+        public int Assists { get; set; } = 0;
+        public int Score { get; set; } = 0;
+        public int HeadshotKills { get; set; } = 0;
+        public int MVPs { get; set; } = 0;
+        public string Ping { get; set; } = string.Empty;
     }
 
     public override void Load(bool hotReload)
@@ -38,153 +58,250 @@ public class SlotTracker : BasePlugin
         Console.WriteLine("[SlotTracker] Plugin loading...");
         
         _config = LoadConfig();
-        InitializeDatabase();
-
-        // Initialize with default value
+        _httpClient = new HttpClient();
+        _httpClient.DefaultRequestHeaders.Add("X-API-Key", _config.ApiKey);
+        _httpClient.DefaultRequestHeaders.Add("X-Server-ID", _config.ServerId);
+        
+        // Initialize with default value - don't try to get MaxPlayers yet
         _serverSlots = 10; // Default value
         Console.WriteLine($"[SlotTracker] Server initialized with default slots: {_serverSlots}");
-
+        
         // Register event handlers
         RegisterEventHandler<EventPlayerConnectFull>(OnPlayerConnect, HookMode.Post);
         RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect, HookMode.Pre);
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
         
+        // Register team change events
+        RegisterEventHandler<EventPlayerTeam>(OnPlayerTeamChange, HookMode.Post);
+        
+        // Register round end event for tracking round wins
+        RegisterEventHandler<EventRoundEnd>(OnRoundEnd, HookMode.Post);
+        
+        // Register command to view team stats
+        AddCommand("css_teamstats", "Shows current team statistics", CommandTeamStats);
+        
+        // Add a timer to initialize when server is ready
+        AddTimer(5.0f, () => OnServerReady());
+        
         Console.WriteLine("[SlotTracker] Plugin loaded successfully!");
-        Console.WriteLine("[SlotTracker] Database config:");
-        Console.WriteLine($"Host: {_config.Host}");
-        Console.WriteLine($"Database: {_config.Database}");
-        Console.WriteLine($"User: {_config.User}");
-        Console.WriteLine($"Port: {_config.Port}");
-
-        // Add timer to update server slots once server is ready
-        AddTimer(1.0f, () => 
+        
+        if (_config.EnableApiSync)
         {
+            Console.WriteLine("[SlotTracker] API Sync enabled");
+            Console.WriteLine($"API Endpoint: {_config.ApiEndpoint}");
+            Console.WriteLine($"Server ID: {_config.ServerId}");
+            Console.WriteLine($"Server Name: {_config.ServerName}");
+            Console.WriteLine($"Sync Interval: {_config.ApiSyncIntervalSeconds} seconds");
+        }
+        else
+        {
+            Console.WriteLine("[SlotTracker] API Sync disabled");
+        }
+    }
+    
+    public override void Unload(bool hotReload)
+    {
+        // Make sure to dispose of HttpClient when plugin unloads
+        _httpClient?.Dispose();
+        _apiSyncTimer?.Kill();
+        
+        base.Unload(hotReload);
+    }
+    
+    private void OnServerReady()
+    {
+        try
+        {
+            Console.WriteLine("[SlotTracker] Server is ready, initializing...");
+            
+            // Now it's safe to access Server.MaxPlayers and get the current map
             try 
             {
                 _serverSlots = Server.MaxPlayers;
+                if (string.IsNullOrEmpty(_currentMap))
+                {
+                    _currentMap = Server.MapName;
+                    Console.WriteLine($"[SlotTracker] Initial map set to: {_currentMap}");
+                }
                 Console.WriteLine($"[SlotTracker] Updated server slots to: {_serverSlots}");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[SlotTracker] Error getting server slots: {ex.Message}");
+                Console.WriteLine("[SlotTracker] Using default value of 10 slots");
             }
-        });
+            
+            // Reset stats for new session
+            ResetStats();
+            
+            // Start API sync timer after server is ready
+            if (_config.EnableApiSync)
+            {
+                _apiSyncTimer = AddTimer(_config.ApiSyncIntervalSeconds, SyncDataWithApi, TimerFlags.REPEAT);
+                Console.WriteLine($"[SlotTracker] API sync timer started, interval: {_config.ApiSyncIntervalSeconds}s");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SlotTracker] Error in OnServerReady: {ex.Message}");
+        }
     }
 
-    private void CommandStats(CCSPlayerController? player, CommandInfo command)
+    private void CommandTeamStats(CCSPlayerController? player, CommandInfo command)
     {
         try
         {
-            using var conn = new MySqlConnection(GetConnectionString());
+            // Get current stats from memory
+            int tCount = _tPlayers.Count;
+            int ctCount = _ctPlayers.Count;
             
-            // Get the latest record
-            const string latestSql = @"
-                SELECT * FROM server_stats 
-                ORDER BY timestamp DESC 
-                LIMIT 1";
+            // Display stats
+            var message = $"Team Stats - T: {tCount} players, CT: {ctCount} players, Map: {_currentMap}";
             
-            var latest = conn.QueryFirstOrDefault<ServerStats>(latestSql);
-
-            if (latest != null)
+            if (player != null)
             {
-                var message = $"Latest Stats: {latest.PlayerCount}/{latest.ServerSlots} players (recorded at {latest.Timestamp:yyyy-MM-dd HH:mm:ss})";
+                player.PrintToChat($" \x04[SlotTracker]\x01 {message}");
                 
-                if (player != null)
+                // Show T side players
+                if (_tPlayers.Any())
                 {
-                    player.PrintToChat($" \x04[SlotTracker]\x01 {message}");
+                    player.PrintToChat($" \x04[SlotTracker]\x01 T Side: {string.Join(", ", _tPlayers.Select(p => p.Name))}");
                 }
-                else
+                
+                // Show CT side players
+                if (_ctPlayers.Any())
                 {
-                    Console.WriteLine($"[SlotTracker] {message}");
+                    player.PrintToChat($" \x04[SlotTracker]\x01 CT Side: {string.Join(", ", _ctPlayers.Select(p => p.Name))}");
                 }
-
-                // Get stats for the last 24 hours
-                const string dailyStatsSql = @"
-                    SELECT 
-                        MAX(player_count) as max_players,
-                        AVG(player_count) as avg_players,
-                        MIN(player_count) as min_players
-                    FROM server_stats 
-                    WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)";
-
-                var dailyStats = conn.QueryFirst(dailyStatsSql);
-                var statsMessage = $"24h Stats - Max: {dailyStats.max_players}, Avg: {Math.Round((double)dailyStats.avg_players, 1)}, Min: {dailyStats.min_players}";
-
-                if (player != null)
-                {
-                    player.PrintToChat($" \x04[SlotTracker]\x01 {statsMessage}");
-                }
-                else
-                {
-                    Console.WriteLine($"[SlotTracker] {statsMessage}");
-                }
+                
+                // Show round stats
+                var roundsMessage = $"Round Wins - T: \x07{_tRounds}\x01, CT: \x0B{_ctRounds}\x01";
+                player.PrintToChat($" \x04[SlotTracker]\x01 {roundsMessage}");
             }
             else
             {
-                var message = "No stats recorded yet.";
-                if (player != null)
+                Console.WriteLine($"[SlotTracker] {message}");
+                
+                if (_tPlayers.Any())
                 {
-                    player.PrintToChat($" \x04[SlotTracker]\x01 {message}");
+                    Console.WriteLine($"[SlotTracker] T Side: {string.Join(", ", _tPlayers.Select(p => p.Name))}");
                 }
-                else
+                
+                if (_ctPlayers.Any())
                 {
-                    Console.WriteLine($"[SlotTracker] {message}");
+                    Console.WriteLine($"[SlotTracker] CT Side: {string.Join(", ", _ctPlayers.Select(p => p.Name))}");
                 }
+                
+                Console.WriteLine($"[SlotTracker] Round Wins - T: {_tRounds}, CT: {_ctRounds}");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SlotTracker] Error retrieving stats: {ex.Message}");
+            Console.WriteLine($"[SlotTracker] Error retrieving team stats: {ex.Message}");
             if (player != null)
             {
-                player.PrintToChat(" \x02[SlotTracker]\x01 Error retrieving stats.");
+                player.PrintToChat(" \x02[SlotTracker]\x01 Error retrieving team stats.");
             }
         }
     }
-
-    private void InitializeDatabase()
-    {
-        try
-        {
-            Console.WriteLine("[SlotTracker] Initializing database...");
-            using var conn = new MySqlConnection(GetConnectionString());
-            conn.Open();
-            Console.WriteLine("[SlotTracker] Database connection test successful");
-
-            // Create table if it doesn't exist
-            const string createTableSql = @"
-                CREATE TABLE IF NOT EXISTS server_stats (
-                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                    timestamp DATETIME,
-                    player_count INT,
-                    server_slots INT
-                )";
-            
-            conn.Execute(createTableSql);
-            Console.WriteLine("[SlotTracker] Database initialized successfully");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[SlotTracker] Database initialization error: {ex.Message}");
-            Console.WriteLine($"[SlotTracker] Stack trace: {ex.StackTrace}");
-        }
-    }
-
+    
     private void OnMapStart(string mapName)
     {
         // Update server slots after map change
         try 
         {
             _serverSlots = Server.MaxPlayers;
+            _currentMap = mapName;
             Console.WriteLine($"[SlotTracker] Server slots updated on map start: {_serverSlots}");
+            Console.WriteLine($"[SlotTracker] Current map: {_currentMap}");
+            
+            // Only reset stats if this isn't the initial map load
+            if (_apiSyncTimer != null)
+            {
+                Console.WriteLine($"[SlotTracker] Map changed, resetting stats for new map: {_currentMap}");
+                ResetStats();
+            }
+            else
+            {
+                Console.WriteLine($"[SlotTracker] Initial map load detected, skipping reset");
+            }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SlotTracker] Error updating server slots on map start: {ex.Message}");
+            Console.WriteLine($"[SlotTracker] Error in OnMapStart: {ex.Message}");
         }
     }
 
-    private DatabaseConfig LoadConfig()
+    private void ResetStats()
+    {
+        _tRounds = 0;
+        _ctRounds = 0;
+        _playerCount = 0;
+        _tPlayers.Clear();
+        _ctPlayers.Clear();
+        
+        // Scan for current players
+        UpdatePlayerLists();
+        
+        Console.WriteLine($"[SlotTracker] Stats reset. Current players: {_playerCount}");
+    }
+    
+    private void UpdatePlayerLists()
+    {
+        try
+        {
+            _tPlayers.Clear();
+            _ctPlayers.Clear();
+            
+            foreach (var player in Utilities.GetPlayers())
+            {
+                if (player == null || !player.IsValid || player.IsBot || player.IsHLTV || 
+                    player.Connected != PlayerConnectedState.PlayerConnected)
+                {
+                    continue;
+                }
+                
+                var playerInfo = new PlayerInfo
+                {
+                    Name = player.PlayerName,
+                    SteamId = player.SteamID.ToString()
+                };
+                
+                // Collect player stats
+                if (player.PlayerPawn != null && player.PlayerPawn.Value != null && 
+                    player.PlayerPawn.Value.Controller != null && player.PlayerPawn.Value.Controller.Value != null)
+                {
+                    var playerController = player.PlayerPawn.Value.Controller.Value;
+                    playerInfo.Kills = player.ActionTrackingServices?.MatchStats?.Kills ?? 0;
+                    playerInfo.Deaths = player.ActionTrackingServices?.MatchStats?.Deaths ?? 0;
+                    playerInfo.Assists = player.ActionTrackingServices?.MatchStats?.Assists ?? 0;
+                    playerInfo.Score = player.Score;
+                    playerInfo.HeadshotKills = player.ActionTrackingServices?.MatchStats?.HeadShotKills ?? 0;
+                    playerInfo.MVPs = player.MVPs;
+                    playerInfo.Ping = player.Ping.ToString();
+                }
+                
+                if (player.TeamNum == (int)CounterStrikeSharp.API.Modules.Utils.CsTeam.Terrorist)
+                {
+                    playerInfo.Team = "T";
+                    _tPlayers.Add(playerInfo);
+                }
+                else if (player.TeamNum == (int)CounterStrikeSharp.API.Modules.Utils.CsTeam.CounterTerrorist)
+                {
+                    playerInfo.Team = "CT";
+                    _ctPlayers.Add(playerInfo);
+                }
+            }
+            
+            _playerCount = _tPlayers.Count + _ctPlayers.Count;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SlotTracker] Error updating player lists: {ex.Message}");
+        }
+    }
+
+    private Config.ServerConfig LoadConfig()
     {
         var configPath = Path.Join(ModuleDirectory, "config.json");
         if (!File.Exists(configPath))
@@ -193,13 +310,13 @@ public class SlotTracker : BasePlugin
         }
 
         var jsonString = File.ReadAllText(configPath);
-        return JsonSerializer.Deserialize<DatabaseConfig>(jsonString) 
+        var config = JsonSerializer.Deserialize<Config.ServerConfig>(jsonString) 
             ?? throw new Exception("Failed to deserialize config!");
-    }
-
-    private HookResult OnGameMessage(EventGameMessage @event, GameEventInfo info)
-    {
-        return HookResult.Continue;
+            
+        Console.WriteLine($"[SlotTracker] Loaded config from {configPath}");
+        Console.WriteLine($"[SlotTracker] ServerName from config: '{config.ServerName}'");
+        
+        return config;
     }
 
     private HookResult OnPlayerConnect(EventPlayerConnectFull @event, GameEventInfo info)
@@ -207,26 +324,17 @@ public class SlotTracker : BasePlugin
         Console.WriteLine("[SlotTracker] OnPlayerConnect event triggered");
         
         var player = @event.Userid;
-        if (player == null)
+        if (player == null || player.IsBot || player.IsHLTV)
         {
-            Console.WriteLine("[SlotTracker] Player is null");
-            return HookResult.Continue;
-        }
-
-        if (player.IsBot)
-        {
-            Console.WriteLine("[SlotTracker] Skipping bot connect");
-            return HookResult.Continue;
-        }
-
-        if (player.IsHLTV)
-        {
-            Console.WriteLine("[SlotTracker] Skipping HLTV connect");
             return HookResult.Continue;
         }
 
         Console.WriteLine($"[SlotTracker] Player connecting: {player.PlayerName} (SteamID: {player.SteamID})");
-        UpdateDatabase(player, "connect");
+        
+        // Update player count
+        UpdatePlayerLists();
+        SyncDataWithApi();
+        
         return HookResult.Continue;
     }
 
@@ -235,175 +343,230 @@ public class SlotTracker : BasePlugin
         Console.WriteLine("[SlotTracker] OnPlayerDisconnect event triggered");
         
         var player = @event.Userid;
-        if (player == null)
+        if (player == null || player.IsBot || player.IsHLTV)
         {
-            Console.WriteLine("[SlotTracker] Player is null");
             return HookResult.Continue;
         }
 
-        if (player.IsBot)
-        {
-            Console.WriteLine("[SlotTracker] Skipping bot disconnect");
-            return HookResult.Continue;
-        }
-
-        if (player.IsHLTV)
-        {
-            Console.WriteLine("[SlotTracker] Skipping HLTV disconnect");
-            return HookResult.Continue;
-        }
-
-        // Log disconnect details for debugging
         Console.WriteLine($"[SlotTracker] Disconnect event - Player: {player.PlayerName}, SteamID: {player.SteamID}, Reason: {@event.Reason}");
-
-        // Check for Steam ban disconnect (2006) or kick (6)
-        if (@event.Reason == 2006 || @event.Reason == 6)
-        {
-            Console.WriteLine($"[SlotTracker] Ban/kick detected for {player.PlayerName}, skipping database update");
-            return HookResult.Continue;
-        }
-
-        UpdateDatabase(player, "disconnect");
+        
+        // Remove player from team lists
+        RemovePlayerFromTeams(player.SteamID.ToString());
+        
+        // Update counts and sync
+        _playerCount = _tPlayers.Count + _ctPlayers.Count;
+        SyncDataWithApi();
+        
         return HookResult.Continue;
     }
-
-    private void UpdateDatabase(CCSPlayerController player, string eventType)
+    
+    private void RemovePlayerFromTeams(string steamId)
     {
-        if (_updatePending)
-        {
-            Console.WriteLine("[SlotTracker] Update already pending, skipping");
-            return;
-        }
+        _tPlayers.RemoveAll(p => p.SteamId == steamId);
+        _ctPlayers.RemoveAll(p => p.SteamId == steamId);
+    }
 
-        _updatePending = true;
-        Console.WriteLine($"[SlotTracker] Starting database update for {eventType} - Player: {player.PlayerName}");
-
+    private HookResult OnPlayerTeamChange(EventPlayerTeam @event, GameEventInfo info)
+    {
         try
         {
-            // Get current player count
-            var players = Utilities.GetPlayers();
-            Console.WriteLine($"[SlotTracker] Total players found: {players.Count}");
+            var player = @event.Userid;
+            if (player == null || player.IsBot || player.IsHLTV)
+            {
+                return HookResult.Continue;
+            }
             
-            var currentPlayers = players
-                .Count(p => p != null && 
-                       p.Connected == PlayerConnectedState.PlayerConnected && 
-                       !p.IsBot && 
-                       !p.IsHLTV);
-
-            Console.WriteLine($"[SlotTracker] Connected non-bot players: {currentPlayers}");
-
-            // Adjust count for disconnects since the player is still counted
-            if (eventType == "disconnect")
-            {
-                currentPlayers = Math.Max(0, currentPlayers - 1);
-                Console.WriteLine($"[SlotTracker] Adjusted player count after disconnect: {currentPlayers}");
-            }
-
-            // Get connection string
-            var connectionString = GetConnectionString();
-            if (string.IsNullOrEmpty(connectionString))
-            {
-                Console.WriteLine("[SlotTracker] Error: Invalid connection string");
-                return;
-            }
-
-            using var conn = new MySqlConnection(connectionString);
+            // Get team information
+            int oldTeam = @event.Oldteam;
+            int newTeam = @event.Team;
             
-            // Test connection before proceeding
-            try
+            string oldTeamName = GetTeamName(oldTeam);
+            string newTeamName = GetTeamName(newTeam);
+            
+            Console.WriteLine($"[SlotTracker] Player {player.PlayerName} changing team: {oldTeamName} -> {newTeamName}");
+            
+            // Update our player lists
+            string steamId = player.SteamID.ToString();
+            RemovePlayerFromTeams(steamId);
+            
+            var playerInfo = new PlayerInfo
             {
-                conn.Open();
-                Console.WriteLine("[SlotTracker] Database connection test successful");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[SlotTracker] Failed to connect to database: {ex.Message}");
-                Console.WriteLine($"[SlotTracker] Connection error stack trace: {ex.StackTrace}");
-                return;
-            }
-
-            var stats = new ServerStats
-            {
-                Timestamp = DateTime.UtcNow,
-                PlayerCount = currentPlayers,
-                ServerSlots = _serverSlots
+                Name = player.PlayerName,
+                SteamId = steamId
             };
-
-            const string insertSql = @"
-                INSERT INTO server_stats (timestamp, player_count, server_slots) 
-                VALUES (@Timestamp, @PlayerCount, @ServerSlots)";
-
-            try
+            
+            if (newTeam == (int)CounterStrikeSharp.API.Modules.Utils.CsTeam.Terrorist)
             {
-                var rowsAffected = conn.Execute(insertSql, stats);
-                
-                if (rowsAffected > 0)
-                {
-                    Console.WriteLine($"[SlotTracker] Database update successful - {rowsAffected} rows affected");
-                    Console.WriteLine($"[SlotTracker] Updated values - Players: {currentPlayers}/{_serverSlots}, Time: {stats.Timestamp:yyyy-MM-dd HH:mm:ss}");
-                }
-                else
-                {
-                    Console.WriteLine("[SlotTracker] Warning: Database update completed but no rows were affected");
-                }
-
-                // Verify the update by retrieving the latest record
-                const string verifySql = @"
-                    SELECT * FROM server_stats 
-                    ORDER BY timestamp DESC 
-                    LIMIT 1";
-
-                var latestRecord = conn.QueryFirstOrDefault<ServerStats>(verifySql);
-                if (latestRecord != null)
-                {
-                    Console.WriteLine($"[SlotTracker] Verification - Latest record: Players: {latestRecord.PlayerCount}/{latestRecord.ServerSlots}, Time: {latestRecord.Timestamp:yyyy-MM-dd HH:mm:ss}");
-                }
-                else
-                {
-                    Console.WriteLine("[SlotTracker] Warning: Could not verify the update - no records found");
-                }
+                playerInfo.Team = "T";
+                _tPlayers.Add(playerInfo);
             }
-            catch (MySqlException ex)
+            else if (newTeam == (int)CounterStrikeSharp.API.Modules.Utils.CsTeam.CounterTerrorist)
             {
-                Console.WriteLine($"[SlotTracker] MySQL Error during insert: {ex.Message}");
-                Console.WriteLine($"[SlotTracker] Error Code: {ex.Number}");
-                Console.WriteLine($"[SlotTracker] Stack Trace: {ex.StackTrace}");
+                playerInfo.Team = "CT";
+                _ctPlayers.Add(playerInfo);
             }
+            
+            // Sync updated data
+            SyncDataWithApi();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SlotTracker] Unexpected error in UpdateDatabase: {ex.Message}");
-            Console.WriteLine($"[SlotTracker] Stack Trace: {ex.StackTrace}");
+            Console.WriteLine($"[SlotTracker] Error in OnPlayerTeamChange: {ex.Message}");
         }
-        finally
-        {
-            _updatePending = false;
-        }
+        
+        return HookResult.Continue;
     }
 
-    private string GetConnectionString()
+    private HookResult OnRoundEnd(EventRoundEnd @event, GameEventInfo info)
     {
         try
         {
-            if (_config == null)
+            int winnerTeam = @event.Winner;
+            string winnerTeamName = GetTeamName(winnerTeam);
+            
+            Console.WriteLine($"[SlotTracker] Round ended. Winner: {winnerTeamName} (Team {winnerTeam})");
+            
+            // Update the appropriate team's round count
+            if (winnerTeam == (int)CounterStrikeSharp.API.Modules.Utils.CsTeam.Terrorist)
             {
-                Console.WriteLine("[SlotTracker] Error: Database config is null!");
-                return string.Empty;
+                // T team won
+                _tRounds++;
+                Console.WriteLine($"[SlotTracker] Updated T rounds: {_tRounds}");
             }
-
-            var connString = $"Server={_config.Host};Database={_config.Database};User={_config.User};Password={_config.Password};Port={_config.Port};";
-            Console.WriteLine($"[SlotTracker] Connection string: {connString.Replace(_config.Password, "********")}");
-            return connString;
+            else if (winnerTeam == (int)CounterStrikeSharp.API.Modules.Utils.CsTeam.CounterTerrorist)
+            {
+                // CT team won
+                _ctRounds++;
+                Console.WriteLine($"[SlotTracker] Updated CT rounds: {_ctRounds}");
+            }
+            else
+            {
+                Console.WriteLine($"[SlotTracker] Unhandled winner team: {winnerTeam}");
+            }
+            
+            // Sync updated data
+            SyncDataWithApi();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SlotTracker] Error building connection string: {ex.Message}");
-            return string.Empty;
+            Console.WriteLine($"[SlotTracker] Error in OnRoundEnd: {ex.Message}");
         }
+        
+        return HookResult.Continue;
+    }
+    
+    private string GetTeamName(int teamNum)
+    {
+        return teamNum switch
+        {
+            0 => "None",
+            1 => "Spectator",
+            2 => "Terrorist",
+            3 => "CT",
+            _ => $"Unknown({teamNum})"
+        };
     }
 
-    private HookResult OnServerOutput(string message)
+    private void SyncDataWithApi()
     {
-        return HookResult.Continue;
+        try
+        {
+            if (!_config.EnableApiSync)
+            {
+                return;
+            }
+            
+            Console.WriteLine("[SlotTracker] Starting API sync...");
+            Console.WriteLine($"[SlotTracker] Current map for API sync: '{_currentMap}'");
+            
+            // Ensure player lists are up to date
+            UpdatePlayerLists();
+            
+            // Convert to list of player details for API
+            var playerDetails = new List<object>();
+            
+            // Add T players
+            foreach (var player in _tPlayers)
+            {
+                playerDetails.Add(new {
+                    name = player.Name,
+                    steam_id = player.SteamId,
+                    team = "T",
+                    kills = player.Kills,
+                    deaths = player.Deaths,
+                    assists = player.Assists,
+                    score = player.Score,
+                    headshot_kills = player.HeadshotKills,
+                    mvps = player.MVPs,
+                    ping = player.Ping
+                });
+            }
+            
+            // Add CT players
+            foreach (var player in _ctPlayers)
+            {
+                playerDetails.Add(new {
+                    name = player.Name,
+                    steam_id = player.SteamId,
+                    team = "CT",
+                    kills = player.Kills,
+                    deaths = player.Deaths,
+                    assists = player.Assists,
+                    score = player.Score,
+                    headshot_kills = player.HeadshotKills,
+                    mvps = player.MVPs,
+                    ping = player.Ping
+                });
+            }
+            
+            // Prepare data for API
+            var apiData = new
+            {
+                server_id = _config.ServerId,
+                server_name = _config.ServerName,
+                session_id = _sessionId,
+                timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+                map_name = _currentMap,
+                player_count = _playerCount,
+                server_slots = _serverSlots,
+                t_rounds = _tRounds,
+                ct_rounds = _ctRounds,
+                t_players = _tPlayers.Count,
+                ct_players = _ctPlayers.Count,
+                players = playerDetails
+            };
+            
+            Console.WriteLine($"[SlotTracker] API data server_name: '{apiData.server_name}'");
+            Console.WriteLine($"[SlotTracker] API data map_name: '{apiData.map_name}'");
+            
+            // Send data to API
+            var content = new StringContent(JsonSerializer.Serialize(apiData), Encoding.UTF8, "application/json");
+            
+            Task.Run(async () => 
+            {
+                try
+                {
+                    var response = await _httpClient.PostAsync(_config.ApiEndpoint, content);
+                    var responseString = await response.Content.ReadAsStringAsync();
+                    
+                    if (response.IsSuccessStatusCode)
+                    {
+                        Console.WriteLine($"[SlotTracker] API sync successful: {responseString}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[SlotTracker] API sync failed: {response.StatusCode}, {responseString}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[SlotTracker] API request error: {ex.Message}");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SlotTracker] Error in API sync: {ex.Message}");
+        }
     }
 }

@@ -1,32 +1,36 @@
 @echo off
-echo Cleaning old files...
-if exist "build" rd /s /q "build"
+setlocal enabledelayedexpansion
 
-echo Building project...
-dotnet build -c Release
+echo Building CS2 Slots Tracker Plugin...
+dotnet publish -c Release
 
 echo Cleaning up unnecessary files...
 cd build\counterstrikesharp\plugins\cs2-slots-tracker
 del /f /q *.pdb
 del /f /q *.deps.json
-del /f /q System.*.dll
-del /f /q Microsoft.*.dll
-del /f /q *.xml
 
-echo Keeping only necessary DLLs...
-for %%i in (*.dll) do (
-    if not "%%i"=="cs2-slots-tracker.dll" (
-        if not "%%i"=="Dapper.dll" (
-            if not "%%i"=="MySqlConnector.dll" (
-                if not "%%i"=="System.Memory.dll" (
-                    if not "%%i"=="System.Runtime.CompilerServices.Unsafe.dll" (
-                        del "%%i"
-                    )
-                )
-            )
-        )
-    )
-)
+echo Creating zip file...
+set "zipfile=cs2-slots-tracker.zip"
+if exist %zipfile% del /f /q %zipfile%
 
-echo Done! Files ready in build/counterstrikesharp/plugins/cs2-slots-tracker
+echo Adding files to zip...
+powershell Compress-Archive -Path * -DestinationPath %zipfile%
+
+echo Removing unnecessary DLLs from zip...
+powershell -command "& {
+  $zip = [System.IO.Compression.ZipFile]::Open('%zipfile%', 'Update')
+  foreach ($entry in $zip.Entries) {
+    if ($entry.Name -ne 'cs2-slots-tracker.dll' -and 
+        $entry.Name -ne 'config.json' -and 
+        (-not $entry.Name.EndsWith('.xml'))) {
+      Write-Host ('Removing {0}' -f $entry.FullName)
+      $entry.Delete()
+    }
+  }
+  $zip.Dispose()
+}"
+
+echo Build complete! Output: build\counterstrikesharp\plugins\cs2-slots-tracker\%zipfile%
 cd ..\..\..\..
+
+endlocal

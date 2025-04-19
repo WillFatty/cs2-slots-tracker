@@ -29,19 +29,6 @@
           }
         }
       },
-      "Dapper/2.1.24": {
-        "type": "package",
-        "compile": {
-          "lib/net7.0/Dapper.dll": {
-            "related": ".xml"
-          }
-        },
-        "runtime": {
-          "lib/net7.0/Dapper.dll": {
-            "related": ".xml"
-          }
-        }
-      },
       "McMaster.NETCore.Plugins/1.4.0": {
         "type": "package",
         "dependencies": {
@@ -463,7 +450,7 @@
           "buildTransitive/net6.0/_._": {}
         }
       },
-      "Microsoft.Extensions.Logging.Abstractions/7.0.1": {
+      "Microsoft.Extensions.Logging.Abstractions/7.0.0": {
         "type": "package",
         "compile": {
           "lib/net7.0/Microsoft.Extensions.Logging.Abstractions.dll": {
@@ -471,7 +458,7 @@
           }
         },
         "runtime": {
-          "lib/net7.0/Microsoft.Extensions.Logging.Abstractions.dll": {
+          "lib/net7.0/_._": {
             "related": ".xml"
           }
         },
@@ -654,22 +641,6 @@
         },
         "build": {
           "buildTransitive/net6.0/_._": {}
-        }
-      },
-      "MySqlConnector/2.3.3": {
-        "type": "package",
-        "dependencies": {
-          "Microsoft.Extensions.Logging.Abstractions": "7.0.1"
-        },
-        "compile": {
-          "lib/net7.0/MySqlConnector.dll": {
-            "related": ".xml"
-          }
-        },
-        "runtime": {
-          "lib/net7.0/MySqlConnector.dll": {
-            "related": ".xml"
-          }
         }
       },
       "Scrutor/4.2.2": {
@@ -872,27 +843,6 @@
         "lib/net7.0/CounterStrikeSharp.API.dll",
         "lib/net7.0/CounterStrikeSharp.API.runtimeconfig.json",
         "lib/net7.0/CounterStrikeSharp.API.xml"
-      ]
-    },
-    "Dapper/2.1.24": {
-      "sha512": "/2t2vsdJyZRsk13AsWigZpsuFvEwK+o3v862cEULXoww905gyKhJFSuwmZI/4Ui9COX9ZCFCI09UHyH4wVYl3A==",
-      "type": "package",
-      "path": "dapper/2.1.24",
-      "files": [
-        ".nupkg.metadata",
-        ".signature.p7s",
-        "Dapper.png",
-        "dapper.2.1.24.nupkg.sha512",
-        "dapper.nuspec",
-        "lib/net461/Dapper.dll",
-        "lib/net461/Dapper.xml",
-        "lib/net5.0/Dapper.dll",
-        "lib/net5.0/Dapper.xml",
-        "lib/net7.0/Dapper.dll",
-        "lib/net7.0/Dapper.xml",
-        "lib/netstandard2.0/Dapper.dll",
-        "lib/netstandard2.0/Dapper.xml",
-        "readme.md"
       ]
     },
     "McMaster.NETCore.Plugins/1.4.0": {
@@ -1618,10 +1568,10 @@
         "useSharedDesignerContext.txt"
       ]
     },
-    "Microsoft.Extensions.Logging.Abstractions/7.0.1": {
-      "sha512": "pkeBFx0vqMW/A3aUVHh7MPu3WkBhaVlezhSZeb1c9XD0vUReYH1TLFSy5MxJgZfmz5LZzYoErMorlYZiwpOoNA==",
+    "Microsoft.Extensions.Logging.Abstractions/7.0.0": {
+      "sha512": "kmn78+LPVMOWeITUjIlfxUPDsI0R6G0RkeAMBmQxAJ7vBJn4q2dTva7pWi65ceN5vPGjJ9q/Uae2WKgvfktJAw==",
       "type": "package",
-      "path": "microsoft.extensions.logging.abstractions/7.0.1",
+      "path": "microsoft.extensions.logging.abstractions/7.0.0",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -1683,7 +1633,7 @@
         "lib/net7.0/Microsoft.Extensions.Logging.Abstractions.xml",
         "lib/netstandard2.0/Microsoft.Extensions.Logging.Abstractions.dll",
         "lib/netstandard2.0/Microsoft.Extensions.Logging.Abstractions.xml",
-        "microsoft.extensions.logging.abstractions.7.0.1.nupkg.sha512",
+        "microsoft.extensions.logging.abstractions.7.0.0.nupkg.sha512",
         "microsoft.extensions.logging.abstractions.nuspec",
         "useSharedDesignerContext.txt"
       ]
@@ -1904,35 +1854,6 @@
         "microsoft.extensions.primitives.7.0.0.nupkg.sha512",
         "microsoft.extensions.primitives.nuspec",
         "useSharedDesignerContext.txt"
-      ]
-    },
-    "MySqlConnector/2.3.3": {
-      "sha512": "RmzpYUKmvf/hJcAOcymU+cUg6OopL+99q7P27hniyw2Nu907DBLsEZVejpqhBLI2qAYgEk9fKC9yn46vkQEUfQ==",
-      "type": "package",
-      "path": "mysqlconnector/2.3.3",
-      "files": [
-        ".nupkg.metadata",
-        ".signature.p7s",
-        "README.md",
-        "lib/net462/MySqlConnector.dll",
-        "lib/net462/MySqlConnector.xml",
-        "lib/net471/MySqlConnector.dll",
-        "lib/net471/MySqlConnector.xml",
-        "lib/net48/MySqlConnector.dll",
-        "lib/net48/MySqlConnector.xml",
-        "lib/net6.0/MySqlConnector.dll",
-        "lib/net6.0/MySqlConnector.xml",
-        "lib/net7.0/MySqlConnector.dll",
-        "lib/net7.0/MySqlConnector.xml",
-        "lib/net8.0/MySqlConnector.dll",
-        "lib/net8.0/MySqlConnector.xml",
-        "lib/netstandard2.0/MySqlConnector.dll",
-        "lib/netstandard2.0/MySqlConnector.xml",
-        "lib/netstandard2.1/MySqlConnector.dll",
-        "lib/netstandard2.1/MySqlConnector.xml",
-        "logo.png",
-        "mysqlconnector.2.3.3.nupkg.sha512",
-        "mysqlconnector.nuspec"
       ]
     },
     "Scrutor/4.2.2": {
@@ -2298,29 +2219,27 @@
   },
   "projectFileDependencyGroups": {
     "net7.0": [
-      "CounterStrikeSharp.API >= 1.0.142",
-      "Dapper >= 2.1.24",
-      "MySqlConnector >= 2.3.3"
+      "CounterStrikeSharp.API >= 1.0.142"
     ]
   },
   "packageFolders": {
-    "C:\\Users\\rubin\\.nuget\\packages\\": {},
+    "C:\\Users\\willi\\.nuget\\packages\\": {},
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\rubin\\cs2-slots-tracker\\cs2-slots-tracker.csproj",
+      "projectUniqueName": "C:\\Users\\willi\\Desktop\\cs2-slots-tracker\\cs2-slots-tracker.csproj",
       "projectName": "cs2-slots-tracker",
-      "projectPath": "C:\\Users\\rubin\\cs2-slots-tracker\\cs2-slots-tracker.csproj",
-      "packagesPath": "C:\\Users\\rubin\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\rubin\\cs2-slots-tracker\\obj\\",
+      "projectPath": "C:\\Users\\willi\\Desktop\\cs2-slots-tracker\\cs2-slots-tracker.csproj",
+      "packagesPath": "C:\\Users\\willi\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\willi\\Desktop\\cs2-slots-tracker\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
       ],
       "configFilePaths": [
-        "C:\\Users\\rubin\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Users\\willi\\AppData\\Roaming\\NuGet\\NuGet.Config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
@@ -2345,9 +2264,9 @@
       "restoreAuditProperties": {
         "enableAudit": "true",
         "auditLevel": "low",
-        "auditMode": "all"
+        "auditMode": "direct"
       },
-      "SdkAnalysisLevel": "9.0.100"
+      "SdkAnalysisLevel": "9.0.200"
     },
     "frameworks": {
       "net7.0": {
@@ -2358,14 +2277,6 @@
             "suppressParent": "None",
             "target": "Package",
             "version": "[1.0.142, )"
-          },
-          "Dapper": {
-            "target": "Package",
-            "version": "[2.1.24, )"
-          },
-          "MySqlConnector": {
-            "target": "Package",
-            "version": "[2.3.3, )"
           }
         },
         "imports": [
@@ -2379,39 +2290,13 @@
         ],
         "assetTargetFallback": true,
         "warn": true,
-        "downloadDependencies": [
-          {
-            "name": "Microsoft.AspNetCore.App.Ref",
-            "version": "[7.0.20, 7.0.20]"
-          },
-          {
-            "name": "Microsoft.NETCore.App.Ref",
-            "version": "[7.0.20, 7.0.20]"
-          },
-          {
-            "name": "Microsoft.WindowsDesktop.App.Ref",
-            "version": "[7.0.20, 7.0.20]"
-          }
-        ],
         "frameworkReferences": {
           "Microsoft.NETCore.App": {
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.100\\RuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.203\\RuntimeIdentifierGraph.json"
       }
     }
-  },
-  "logs": [
-    {
-      "code": "NU1903",
-      "level": "Warning",
-      "warningLevel": 1,
-      "message": "Package 'System.Text.Json' 7.0.0 has a known high severity vulnerability, https://github.com/advisories/GHSA-hh2w-p6rv-4g7w",
-      "libraryId": "System.Text.Json",
-      "targetGraphs": [
-        "net7.0"
-      ]
-    }
-  ]
+  }
 }
