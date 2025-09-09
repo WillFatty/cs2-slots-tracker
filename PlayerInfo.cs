@@ -14,4 +14,16 @@ public class PlayerInfo
     public int HeadshotKills { get; set; } = 0;
     public int MVPs { get; set; } = 0;
     public string Ping { get; set; } = "0";
+    
+    // Helper method to safely get string values
+    public string GetSafeString(string? value, string defaultValue = "")
+    {
+        return string.IsNullOrEmpty(value) ? defaultValue : value;
+    }
+    
+    // Helper method to safely get int values
+    public int GetSafeInt(int? value, int defaultValue = 0)
+    {
+        return value ?? defaultValue;
+    }
 } 

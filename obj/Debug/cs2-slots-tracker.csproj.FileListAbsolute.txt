@@ -29,3 +29,15 @@ C:\Users\willi\Desktop\cs2-slots-tracker\obj\Debug\cs2-slots-tracker.sourcelink.
 C:\Users\willi\Desktop\cs2-slots-tracker\obj\Debug\cs2-slot.6363E59C.Up2Date
 C:\Users\willi\Desktop\cs2-slots-tracker\obj\Debug\cs2-slots-tracker.dll
 C:\Users\willi\Desktop\cs2-slots-tracker\obj\Debug\cs2-slots-tracker.pdb
+D:\Dev\cs2-slots-tracker\obj\Debug\cs2-slots-tracker.csproj.AssemblyReference.cache
+D:\Dev\cs2-slots-tracker\obj\Debug\cs2-slots-tracker.GeneratedMSBuildEditorConfig.editorconfig
+D:\Dev\cs2-slots-tracker\obj\Debug\cs2-slots-tracker.AssemblyInfoInputs.cache
+D:\Dev\cs2-slots-tracker\obj\Debug\cs2-slots-tracker.AssemblyInfo.cs
+D:\Dev\cs2-slots-tracker\obj\Debug\cs2-slots-tracker.csproj.CoreCompileInputs.cache
+D:\Dev\cs2-slots-tracker\obj\Debug\cs2-slots-tracker.sourcelink.json
+D:\Dev\cs2-slots-tracker\obj\Debug\cs2-slots-tracker.dll
+D:\Dev\cs2-slots-tracker\obj\Debug\cs2-slots-tracker.pdb
+D:\Dev\cs2-slots-tracker\build\counterstrikesharp\plugins\cs2-slots-tracker\config.json
+D:\Dev\cs2-slots-tracker\build\counterstrikesharp\plugins\cs2-slots-tracker\cs2-slots-tracker.deps.json
+D:\Dev\cs2-slots-tracker\build\counterstrikesharp\plugins\cs2-slots-tracker\cs2-slots-tracker.dll
+D:\Dev\cs2-slots-tracker\build\counterstrikesharp\plugins\cs2-slots-tracker\cs2-slots-tracker.pdb

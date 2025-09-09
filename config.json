@@ -1,6 +1,6 @@
 {
     "EnableApiSync": true,
-    "ApiEndpoint": "https://admin.affinitycs2.com/api/stats",
+    "ApiEndpoint": "https://admin.affinitycs2.com/api/cs2",
     "ApiKey": "AffinityCS2APIKey2024",
     "ServerId": "server1",
     "ServerName": "",
