@@ -42,6 +42,12 @@ public class SlotTracker : BasePlugin
     private int _roundTimeRemaining = 0;
     private bool _roundInProgress = false;
     private int _roundDuration = 115; // Will be updated from server CVar
+    
+    // Hibernation tracking
+    private bool _isHibernating = false;
+    private DateTime _hibernationStartTime = DateTime.UtcNow;
+    private int _hibernationCount = 0;
+    private int _lastPlayerCount = 0;
 
     public class PlayerInfo
     {
@@ -61,7 +67,7 @@ public class SlotTracker : BasePlugin
     {
         base.Load(hotReload);
         
-        Console.WriteLine("[SlotTracker] Plugin loading...");
+        //Console.WriteLine("[SlotTracker] Plugin loading...");
         
         _config = LoadConfig();
         _httpClient = new HttpClient();
@@ -70,7 +76,7 @@ public class SlotTracker : BasePlugin
         
         // Initialize with default value - don't try to get MaxPlayers yet
         _serverSlots = 10; // Default value
-        Console.WriteLine($"[SlotTracker] Server initialized with default slots: {_serverSlots}");
+        //Console.WriteLine($"[SlotTracker] Server initialized with default slots: {_serverSlots}");
         
         // Register event handlers
         RegisterEventHandler<EventPlayerConnectFull>(OnPlayerConnect, HookMode.Post);
@@ -98,22 +104,28 @@ public class SlotTracker : BasePlugin
         // Register command to debug round timer
         AddCommand("css_roundtimer", "Shows round timer debug information", CommandRoundTimer);
         
+        // Register command to manually trigger hibernation reset for testing
+        AddCommand("css_hibernation", "Manually trigger hibernation reset for testing", CommandHibernation);
+        
+        // Register command to check hibernation status
+        AddCommand("css_hibernationcheck", "Check hibernation status and trigger if needed", CommandHibernationCheck);
+        
         // Add a timer to initialize when server is ready
         AddTimer(5.0f, () => OnServerReady());
         
-        Console.WriteLine("[SlotTracker] Plugin loaded successfully!");
+        //Console.WriteLine("[SlotTracker] Plugin loaded successfully!");
         
         if (_config.EnableApiSync)
         {
-            Console.WriteLine("[SlotTracker] API Sync enabled");
-            Console.WriteLine($"API Endpoint: {_config.ApiEndpoint}");
-            Console.WriteLine($"Server ID: {_config.ServerId}");
-            Console.WriteLine($"Server Name: {_config.ServerName}");
-            Console.WriteLine($"Sync Interval: {_config.ApiSyncIntervalSeconds} seconds");
+            //Console.WriteLine("[SlotTracker] API Sync enabled");
+            //Console.WriteLine($"API Endpoint: {_config.ApiEndpoint}");
+            //Console.WriteLine($"Server ID: {_config.ServerId}");
+            //Console.WriteLine($"Server Name: {_config.ServerName}");
+            //Console.WriteLine($"Sync Interval: {_config.ApiSyncIntervalSeconds} seconds");
         }
         else
         {
-            Console.WriteLine("[SlotTracker] API Sync disabled");
+            //Console.WriteLine("[SlotTracker] API Sync disabled");
         }
     }
     
@@ -126,7 +138,7 @@ public class SlotTracker : BasePlugin
             _apiSyncTimer?.Kill();
             _statsUpdateTimer?.Kill();
             
-            Console.WriteLine("[SlotTracker] Plugin unloaded successfully");
+            //Console.WriteLine("[SlotTracker] Plugin unloaded successfully");
         }
         catch (Exception ex)
         {
@@ -142,7 +154,7 @@ public class SlotTracker : BasePlugin
     {
         try
         {
-            Console.WriteLine("[SlotTracker] Server is ready, initializing...");
+            //Console.WriteLine("[SlotTracker] Server is ready, initializing...");
             
             // Now it's safe to access Server.MaxPlayers and get the current map
             try 
@@ -151,14 +163,14 @@ public class SlotTracker : BasePlugin
                 if (string.IsNullOrEmpty(_currentMap))
                 {
                     _currentMap = Server.MapName;
-                    Console.WriteLine($"[SlotTracker] Initial map set to: {_currentMap}");
+                    //Console.WriteLine($"[SlotTracker] Initial map set to: {_currentMap}");
                 }
-                Console.WriteLine($"[SlotTracker] Updated server slots to: {_serverSlots}");
+                //Console.WriteLine($"[SlotTracker] Updated server slots to: {_serverSlots}");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[SlotTracker] Error getting server slots: {ex.Message}");
-                Console.WriteLine("[SlotTracker] Using default value of 10 slots");
+                //Console.WriteLine("[SlotTracker] Using default value of 10 slots");
             }
             
             // Reset stats for new session
@@ -169,15 +181,15 @@ public class SlotTracker : BasePlugin
             {
                 // Send data every second for real-time updates
                 _apiSyncTimer = AddTimer(1.0f, () => SyncDataWithApi(), TimerFlags.REPEAT);
-                Console.WriteLine("[SlotTracker] API sync timer started, interval: 1s (real-time mode)");
+                //Console.WriteLine("[SlotTracker] API sync timer started, interval: 1s (real-time mode)");
                 
                 // Start periodic stats update timer (every 5 seconds)
                 _statsUpdateTimer = AddTimer(5.0f, () => UpdateAllPlayerStats(), TimerFlags.REPEAT);
-                Console.WriteLine("[SlotTracker] Stats update timer started, interval: 5s");
+                //Console.WriteLine("[SlotTracker] Stats update timer started, interval: 5s");
                 
                 // Start round timer update (every second)
                 AddTimer(1.0f, () => UpdateRoundTimer(), TimerFlags.REPEAT);
-                Console.WriteLine("[SlotTracker] Round timer update started, interval: 1s");
+                //Console.WriteLine("[SlotTracker] Round timer update started, interval: 1s");
             }
         }
         catch (Exception ex)
@@ -219,19 +231,19 @@ public class SlotTracker : BasePlugin
             }
             else
             {
-                Console.WriteLine($"[SlotTracker] {message}");
+                //Console.WriteLine($"[SlotTracker] {message}");
                 
                 if (_tPlayers.Any())
                 {
-                    Console.WriteLine($"[SlotTracker] T Side: {string.Join(", ", _tPlayers.Select(p => p.Name))}");
+                    //Console.WriteLine($"[SlotTracker] T Side: {string.Join(", ", _tPlayers.Select(p => p.Name))}");
                 }
                 
                 if (_ctPlayers.Any())
                 {
-                    Console.WriteLine($"[SlotTracker] CT Side: {string.Join(", ", _ctPlayers.Select(p => p.Name))}");
+                    //Console.WriteLine($"[SlotTracker] CT Side: {string.Join(", ", _ctPlayers.Select(p => p.Name))}");
                 }
                 
-                Console.WriteLine($"[SlotTracker] Round Wins - T: {_tRounds}, CT: {_ctRounds}");
+                //Console.WriteLine($"[SlotTracker] Round Wins - T: {_tRounds}, CT: {_ctRounds}");
             }
         }
         catch (Exception ex)
@@ -261,7 +273,7 @@ public class SlotTracker : BasePlugin
             }
             else
             {
-                Console.WriteLine($"[SlotTracker] {message}");
+                //Console.WriteLine($"[SlotTracker] {message}");
             }
         }
         catch (Exception ex)
@@ -273,6 +285,72 @@ public class SlotTracker : BasePlugin
             }
         }
     }
+
+    private void CommandHibernation(CCSPlayerController? player, CommandInfo command)
+    {
+        try
+        {
+            //Console.WriteLine($"[SlotTracker] Manual hibernation reset triggered - Before: T={_tRounds}, CT={_ctRounds}");
+            
+            // Manually trigger hibernation reset
+            ResetGameDataOnHibernation();
+            
+            // Send API call with reset data
+            SyncDataWithApi();
+            
+            var message = $"Hibernation reset triggered - Rounds: T={_tRounds}, CT={_ctRounds}, Hibernation Count: {_hibernationCount}";
+            
+            if (player != null)
+            {
+                player.PrintToChat($" \x04[SlotTracker]\x01 {message}");
+            }
+            else
+            {
+                //Console.WriteLine($"[SlotTracker] {message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SlotTracker] Error triggering hibernation reset: {ex.Message}");
+            if (player != null)
+            {
+                player.PrintToChat(" \x02[SlotTracker]\x01 Error triggering hibernation reset.");
+            }
+        }
+    }
+
+    private void CommandHibernationCheck(CCSPlayerController? player, CommandInfo command)
+    {
+        try
+        {
+            //Console.WriteLine("[SlotTracker] Manual hibernation check triggered");
+            
+            // Force check hibernation status
+            CheckForHibernation();
+            
+            var players = Utilities.GetPlayers();
+            var currentPlayerCount = players?.Count(p => p != null && p.IsValid && !p.IsBot && p.Connected == PlayerConnectedState.PlayerConnected) ?? 0;
+            
+            var message = $"Hibernation Check - Players: {currentPlayerCount}, T Rounds: {_tRounds}, CT Rounds: {_ctRounds}, Hibernating: {_isHibernating}";
+            
+            if (player != null)
+            {
+                player.PrintToChat($" \x04[SlotTracker]\x01 {message}");
+            }
+            else
+            {
+                //Console.WriteLine($"[SlotTracker] {message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SlotTracker] Error checking hibernation status: {ex.Message}");
+            if (player != null)
+            {
+                player.PrintToChat(" \x02[SlotTracker]\x01 Error checking hibernation status.");
+            }
+        }
+    }
     
     private void OnMapStart(string mapName)
     {
@@ -281,18 +359,18 @@ public class SlotTracker : BasePlugin
         {
             _serverSlots = Server.MaxPlayers;
             _currentMap = mapName;
-            Console.WriteLine($"[SlotTracker] Server slots updated on map start: {_serverSlots}");
-            Console.WriteLine($"[SlotTracker] Current map: {_currentMap}");
+            //Console.WriteLine($"[SlotTracker] Server slots updated on map start: {_serverSlots}");
+            //Console.WriteLine($"[SlotTracker] Current map: {_currentMap}");
             
             // Only reset stats if this isn't the initial map load
             if (_apiSyncTimer != null)
             {
-                Console.WriteLine($"[SlotTracker] Map changed, resetting stats for new map: {_currentMap}");
+                //Console.WriteLine($"[SlotTracker] Map changed, resetting stats for new map: {_currentMap}");
                 ResetStats();
             }
             else
             {
-                Console.WriteLine($"[SlotTracker] Initial map load detected, skipping reset");
+                //Console.WriteLine($"[SlotTracker] Initial map load detected, skipping reset");
             }
         }
         catch (Exception ex)
@@ -318,7 +396,7 @@ public class SlotTracker : BasePlugin
         // Scan for current players
         UpdatePlayerLists();
         
-        Console.WriteLine($"[SlotTracker] Stats reset. Current players: {_playerCount}");
+        //Console.WriteLine($"[SlotTracker] Stats reset. Current players: {_playerCount}");
     }
     
     private void UpdatePlayerLists()
@@ -411,15 +489,15 @@ public class SlotTracker : BasePlugin
         var config = JsonSerializer.Deserialize<Config.ServerConfig>(jsonString) 
             ?? throw new Exception("Failed to deserialize config!");
             
-        Console.WriteLine($"[SlotTracker] Loaded config from {configPath}");
-        Console.WriteLine($"[SlotTracker] ServerName from config: '{config.ServerName}'");
+        //Console.WriteLine($"[SlotTracker] Loaded config from {configPath}");
+        //Console.WriteLine($"[SlotTracker] ServerName from config: '{config.ServerName}'");
         
         return config;
     }
 
     private HookResult OnPlayerConnect(EventPlayerConnectFull @event, GameEventInfo info)
     {
-        Console.WriteLine("[SlotTracker] OnPlayerConnect event triggered");
+        //Console.WriteLine("[SlotTracker] OnPlayerConnect event triggered");
         
         var player = @event.Userid;
         if (player == null || player.IsBot || player.IsHLTV)
@@ -427,7 +505,15 @@ public class SlotTracker : BasePlugin
             return HookResult.Continue;
         }
 
-        Console.WriteLine($"[SlotTracker] Player connecting: {player.PlayerName} (SteamID: {player.SteamID})");
+        //Console.WriteLine($"[SlotTracker] Player connecting: {player.PlayerName} (SteamID: {player.SteamID})");
+        
+        // If we were hibernating, exit hibernation mode
+        if (_isHibernating)
+        {
+            _isHibernating = false;
+            var hibernationDuration = DateTime.UtcNow - _hibernationStartTime;
+            //Console.WriteLine($"[SlotTracker] Exiting hibernation mode after {hibernationDuration.TotalSeconds:F1}s - Player reconnected");
+        }
         
         // Update player count
         UpdatePlayerLists();
@@ -438,7 +524,7 @@ public class SlotTracker : BasePlugin
 
     private HookResult OnPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
     {
-        Console.WriteLine("[SlotTracker] OnPlayerDisconnect event triggered");
+        //Console.WriteLine("[SlotTracker] OnPlayerDisconnect event triggered");
         
         var player = @event.Userid;
         if (player == null || player.IsBot || player.IsHLTV)
@@ -446,13 +532,19 @@ public class SlotTracker : BasePlugin
             return HookResult.Continue;
         }
 
-        Console.WriteLine($"[SlotTracker] Disconnect event - Player: {player.PlayerName}, SteamID: {player.SteamID}, Reason: {@event.Reason}");
+        //Console.WriteLine($"[SlotTracker] Disconnect event - Player: {player.PlayerName}, SteamID: {player.SteamID}, Reason: {@event.Reason}");
         
         // Remove player from team lists
         RemovePlayerFromTeams(player.SteamID.ToString());
         
-        // Update counts and sync
+        // Update counts
         _playerCount = _tPlayers.Count + _ctPlayers.Count;
+        
+        // Check for hibernation immediately after disconnect
+        //Console.WriteLine("[SlotTracker] Checking for hibernation after disconnect...");
+        CheckForHibernationAfterDisconnect();
+        
+        // Sync data
         RequestApiSync();
         
         return HookResult.Continue;
@@ -462,6 +554,95 @@ public class SlotTracker : BasePlugin
     {
         _tPlayers.RemoveAll(p => p.SteamId == steamId);
         _ctPlayers.RemoveAll(p => p.SteamId == steamId);
+    }
+
+    private void CheckForHibernationAfterDisconnect()
+    {
+        try
+        {
+            // Use our internal player count which is updated immediately
+            //Console.WriteLine($"[SlotTracker] Post-disconnect check - Internal players: {_playerCount}, T Rounds: {_tRounds}, CT Rounds: {_ctRounds}");
+            
+            // If no players left and we have rounds won, trigger hibernation reset
+            if (_playerCount == 0 && (_tRounds > 0 || _ctRounds > 0))
+            {
+                //Console.WriteLine($"[SlotTracker] Last player disconnected with rounds won - triggering hibernation reset");
+                
+                if (!_isHibernating)
+                {
+                    _isHibernating = true;
+                    _hibernationStartTime = DateTime.UtcNow;
+                    _hibernationCount++;
+                }
+                
+                // Reset game data immediately
+                ResetGameDataOnHibernation();
+                
+                // Send final API call with reset data (0-0 score)
+                //Console.WriteLine("[SlotTracker] Sending final API call with hibernation reset data after disconnect");
+                SyncDataWithApi();
+            }
+            else
+            {
+                // If internal count shows 0 but we still have rounds, also trigger reset
+                if (_playerCount == 0 && (_tRounds > 0 || _ctRounds > 0))
+                {
+                    //Console.WriteLine($"[SlotTracker] Internal count shows 0 players with rounds - triggering hibernation reset");
+                    
+                    if (!_isHibernating)
+                    {
+                        _isHibernating = true;
+                        _hibernationStartTime = DateTime.UtcNow;
+                        _hibernationCount++;
+                    }
+                    
+                    ResetGameDataOnHibernation();
+                    //Console.WriteLine("[SlotTracker] Sending final API call with internal count reset");
+                    SyncDataWithApi();
+                }
+            }
+            
+            // Also schedule a delayed check in case the server hasn't fully processed the disconnect
+            AddTimer(2.0f, () => DelayedHibernationCheck());
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SlotTracker] Error checking hibernation after disconnect: {ex.Message}");
+        }
+    }
+
+    private void DelayedHibernationCheck()
+    {
+        try
+        {
+            var players = Utilities.GetPlayers();
+            var currentPlayerCount = players?.Count(p => p != null && p.IsValid && !p.IsBot && p.Connected == PlayerConnectedState.PlayerConnected) ?? 0;
+            
+            //Console.WriteLine($"[SlotTracker] Delayed hibernation check - Server players: {currentPlayerCount}, Internal players: {_playerCount}, T Rounds: {_tRounds}, CT Rounds: {_ctRounds}");
+            
+            // If server shows 0 players and we have rounds, trigger hibernation reset
+            if (currentPlayerCount == 0 && (_tRounds > 0 || _ctRounds > 0))
+            {
+                //Console.WriteLine($"[SlotTracker] Delayed check: Server shows 0 players with rounds - triggering hibernation reset");
+                
+                if (!_isHibernating)
+                {
+                    _isHibernating = true;
+                    _hibernationStartTime = DateTime.UtcNow;
+                    _hibernationCount++;
+                }
+                
+                ResetGameDataOnHibernation();
+                //Console.WriteLine("[SlotTracker] Sending final API call with delayed reset");
+                SyncDataWithApi();
+            }
+            
+            _lastPlayerCount = currentPlayerCount;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SlotTracker] Error in delayed hibernation check: {ex.Message}");
+        }
     }
 
     private HookResult OnPlayerTeamChange(EventPlayerTeam @event, GameEventInfo info)
@@ -481,7 +662,7 @@ public class SlotTracker : BasePlugin
             string oldTeamName = GetTeamName(oldTeam);
             string newTeamName = GetTeamName(newTeam);
             
-            Console.WriteLine($"[SlotTracker] Player {player.PlayerName} changing team: {oldTeamName} -> {newTeamName}");
+            //Console.WriteLine($"[SlotTracker] Player {player.PlayerName} changing team: {oldTeamName} -> {newTeamName}");
             
             // Update our player lists
             string steamId = player.SteamID.ToString();
@@ -526,7 +707,7 @@ public class SlotTracker : BasePlugin
             UpdateRoundDurationFromServer();
             _roundTimeRemaining = _roundDuration;
             
-            Console.WriteLine($"[SlotTracker] Round started at {_roundStartTime:HH:mm:ss}, duration: {_roundDuration}s");
+            //Console.WriteLine($"[SlotTracker] Round started at {_roundStartTime:HH:mm:ss}, duration: {_roundDuration}s");
             
             // Sync updated data
             RequestApiSync();
@@ -549,24 +730,24 @@ public class SlotTracker : BasePlugin
             _roundInProgress = false;
             _roundTimeRemaining = 0;
             
-            Console.WriteLine($"[SlotTracker] Round ended. Winner: {winnerTeamName} (Team {winnerTeam})");
+            //Console.WriteLine($"[SlotTracker] Round ended. Winner: {winnerTeamName} (Team {winnerTeam})");
             
             // Update the appropriate team's round count
             if (winnerTeam == (int)CounterStrikeSharp.API.Modules.Utils.CsTeam.Terrorist)
             {
                 // T team won
                 _tRounds++;
-                Console.WriteLine($"[SlotTracker] Updated T rounds: {_tRounds}");
+                //Console.WriteLine($"[SlotTracker] Updated T rounds: {_tRounds}");
             }
             else if (winnerTeam == (int)CounterStrikeSharp.API.Modules.Utils.CsTeam.CounterTerrorist)
             {
                 // CT team won
                 _ctRounds++;
-                Console.WriteLine($"[SlotTracker] Updated CT rounds: {_ctRounds}");
+                //Console.WriteLine($"[SlotTracker] Updated CT rounds: {_ctRounds}");
             }
             else
             {
-                Console.WriteLine($"[SlotTracker] Unhandled winner team: {winnerTeam}");
+                //Console.WriteLine($"[SlotTracker] Unhandled winner team: {winnerTeam}");
             }
             
             // Sync updated data
@@ -650,7 +831,7 @@ public class SlotTracker : BasePlugin
             var defuser = @event.Userid;
             if (defuser != null && !defuser.IsBot && !defuser.IsHLTV)
             {
-                Console.WriteLine($"[SlotTracker] Bomb defused by: {defuser.PlayerName}");
+                //Console.WriteLine($"[SlotTracker] Bomb defused by: {defuser.PlayerName}");
                 UpdatePlayerStats(defuser.SteamID.ToString());
                 RequestApiSync();
             }
@@ -670,7 +851,7 @@ public class SlotTracker : BasePlugin
             var planter = @event.Userid;
             if (planter != null && !planter.IsBot && !planter.IsHLTV)
             {
-                Console.WriteLine($"[SlotTracker] Bomb planted by: {planter.PlayerName}");
+                //Console.WriteLine($"[SlotTracker] Bomb planted by: {planter.PlayerName}");
                 UpdatePlayerStats(planter.SteamID.ToString());
                 RequestApiSync();
             }
@@ -690,7 +871,7 @@ public class SlotTracker : BasePlugin
             var rescuer = @event.Userid;
             if (rescuer != null && !rescuer.IsBot && !rescuer.IsHLTV)
             {
-                Console.WriteLine($"[SlotTracker] Hostage rescued by: {rescuer.PlayerName}");
+                //Console.WriteLine($"[SlotTracker] Hostage rescued by: {rescuer.PlayerName}");
                 UpdatePlayerStats(rescuer.SteamID.ToString());
                 RequestApiSync();
             }
@@ -710,7 +891,7 @@ public class SlotTracker : BasePlugin
             var mvp = @event.Userid;
             if (mvp != null && !mvp.IsBot && !mvp.IsHLTV)
             {
-                Console.WriteLine($"[SlotTracker] Round MVP: {mvp.PlayerName}");
+                //Console.WriteLine($"[SlotTracker] Round MVP: {mvp.PlayerName}");
                 UpdatePlayerStats(mvp.SteamID.ToString());
                 RequestApiSync();
             }
@@ -846,6 +1027,9 @@ public class SlotTracker : BasePlugin
     {
         try
         {
+            // Check for hibernation
+            CheckForHibernation();
+            
             if (_roundInProgress)
             {
                 // Get the actual round time from server CVar
@@ -861,8 +1045,13 @@ public class SlotTracker : BasePlugin
                 if (_roundTimeRemaining <= 0)
                 {
                     _roundInProgress = false;
-                    Console.WriteLine("[SlotTracker] Round time expired");
+                    //Console.WriteLine("[SlotTracker] Round time expired");
                 }
+            }
+            else
+            {
+                // Try to detect if a round is in progress by checking game state
+                TryDetectRoundInProgress();
             }
         }
         catch (Exception ex)
@@ -898,6 +1087,145 @@ public class SlotTracker : BasePlugin
         }
     }
 
+    private void CheckForHibernation()
+    {
+        try
+        {
+            var players = Utilities.GetPlayers();
+            var currentPlayerCount = players?.Count(p => p != null && p.IsValid && !p.IsBot && p.Connected == PlayerConnectedState.PlayerConnected) ?? 0;
+            
+            // Debug logging every 5 seconds
+            if (DateTime.UtcNow.Second % 5 == 0)
+            {
+                //Console.WriteLine($"[SlotTracker] Hibernation Check - Last: {_lastPlayerCount}, Current: {currentPlayerCount}, Hibernating: {_isHibernating}, T Rounds: {_tRounds}, CT Rounds: {_ctRounds}");
+            }
+            
+            // Check if server went from having players to having no players (hibernation)
+            if (_lastPlayerCount > 0 && currentPlayerCount == 0)
+            {
+                if (!_isHibernating)
+                {
+                    _isHibernating = true;
+                    _hibernationStartTime = DateTime.UtcNow;
+                    _hibernationCount++;
+                    
+                    //Console.WriteLine($"[SlotTracker] Server hibernation detected (count: {_hibernationCount}) - Last: {_lastPlayerCount}, Current: {currentPlayerCount}");
+                    
+                    // Reset game data on hibernation
+                    ResetGameDataOnHibernation();
+                    
+                    // Send final API call with reset data (0-0 score)
+                    //Console.WriteLine("[SlotTracker] Sending final API call with hibernation reset data");
+                    SyncDataWithApi();
+                }
+            }
+            // Check if server came back from hibernation (players reconnected)
+            else if (_isHibernating && currentPlayerCount > 0)
+            {
+                _isHibernating = false;
+                var hibernationDuration = DateTime.UtcNow - _hibernationStartTime;
+                
+                //Console.WriteLine($"[SlotTracker] Server woke up from hibernation after {hibernationDuration.TotalMinutes:F1} minutes");
+                
+                // Reset stats for new session
+                ResetStats();
+            }
+            // If already hibernating, ensure player data is cleared
+            else if (_isHibernating)
+            {
+                // Force clear player data when hibernating
+                _tPlayers.Clear();
+                _ctPlayers.Clear();
+                _playerCount = 0;
+            }
+            // Also check if we have 0 players and rounds > 0 (should trigger hibernation reset)
+            else if (currentPlayerCount == 0 && (_tRounds > 0 || _ctRounds > 0) && !_isHibernating)
+            {
+                //Console.WriteLine($"[SlotTracker] Detected stale data with 0 players but rounds > 0 - triggering hibernation reset");
+                _isHibernating = true;
+                _hibernationStartTime = DateTime.UtcNow;
+                _hibernationCount++;
+                ResetGameDataOnHibernation();
+                
+                // Send final API call with reset data
+                //Console.WriteLine("[SlotTracker] Sending final API call with stale data reset");
+                SyncDataWithApi();
+            }
+            // Additional check: if we have 0 players and any rounds, always reset
+            else if (currentPlayerCount == 0 && (_tRounds > 0 || _ctRounds > 0))
+            {
+                //Console.WriteLine($"[SlotTracker] Fallback check: 0 players with rounds > 0 - forcing hibernation reset");
+                if (!_isHibernating)
+                {
+                    _isHibernating = true;
+                    _hibernationStartTime = DateTime.UtcNow;
+                    _hibernationCount++;
+                }
+                ResetGameDataOnHibernation();
+                //Console.WriteLine("[SlotTracker] Sending final API call with fallback reset");
+                SyncDataWithApi();
+            }
+            
+            _lastPlayerCount = currentPlayerCount;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SlotTracker] Error checking for hibernation: {ex.Message}");
+        }
+    }
+
+    private void ResetGameDataOnHibernation()
+    {
+        try
+        {
+            //Console.WriteLine($"[SlotTracker] Before hibernation reset - T Rounds: {_tRounds}, CT Rounds: {_ctRounds}, Players: {_playerCount}");
+            
+            // Reset rounds won
+            _tRounds = 0;
+            _ctRounds = 0;
+            
+            // Reset round timer
+            _roundInProgress = false;
+            _roundTimeRemaining = 0;
+            
+            // Clear player lists completely
+            _tPlayers.Clear();
+            _ctPlayers.Clear();
+            _playerCount = 0;
+            
+            // Force update player lists to ensure they're empty
+            UpdatePlayerLists();
+            
+            //Console.WriteLine($"[SlotTracker] After hibernation reset - T Rounds: {_tRounds}, CT Rounds: {_ctRounds}, Players: {_playerCount}");
+            //Console.WriteLine($"[SlotTracker] T Players: {_tPlayers.Count}, CT Players: {_ctPlayers.Count}");
+            //Console.WriteLine("[SlotTracker] Game data reset due to hibernation");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SlotTracker] Error resetting game data on hibernation: {ex.Message}");
+        }
+    }
+
+    private void TryDetectRoundInProgress()
+    {
+        try
+        {
+            // Check if there are players in the game
+            var players = Utilities.GetPlayers();
+            if (players != null && players.Any(p => p != null && p.IsValid && !p.IsBot && p.Connected == PlayerConnectedState.PlayerConnected))
+            {
+                // If we have players but no round in progress, we can't reliably detect round state
+                // from the CounterStrikeSharp API, so we'll rely on the EventRoundStart event instead
+                // This method is kept for future API improvements
+                //Console.WriteLine("[SlotTracker] Players detected but no round in progress - waiting for EventRoundStart");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SlotTracker] Error detecting round in progress: {ex.Message}");
+        }
+    }
+
     private float GetRoundStartTime()
     {
         try
@@ -930,13 +1258,24 @@ public class SlotTracker : BasePlugin
             // Console.WriteLine($"[SlotTracker] Starting API sync (attempt {retryCount + 1})...");
             // Console.WriteLine($"[SlotTracker] Current map for API sync: '{_currentMap}'");
             
-            // Ensure player lists are up to date
-            UpdatePlayerLists();
+            // Ensure player lists are up to date (unless hibernating)
+            if (!_isHibernating)
+            {
+                UpdatePlayerLists();
+            }
+            else
+            {
+                // When hibernating, ensure player lists are empty
+                _tPlayers.Clear();
+                _ctPlayers.Clear();
+                _playerCount = 0;
+                //Console.WriteLine("[SlotTracker] Hibernating - cleared player data for API");
+            }
             
             // Validate data before sending
             if (string.IsNullOrEmpty(_config.ServerId) || string.IsNullOrEmpty(_config.ApiEndpoint))
             {
-                Console.WriteLine("[SlotTracker] Invalid configuration: ServerId or ApiEndpoint is empty");
+                //Console.WriteLine("[SlotTracker] Invalid configuration: ServerId or ApiEndpoint is empty");
                 return;
             }
             
@@ -996,6 +1335,9 @@ public class SlotTracker : BasePlugin
                 round_in_progress = _roundInProgress,
                 round_time_remaining = _roundTimeRemaining,
                 round_start_time = _roundStartTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                is_hibernating = _isHibernating,
+                hibernation_count = _hibernationCount,
+                hibernation_start_time = _isHibernating ? _hibernationStartTime.ToString("yyyy-MM-dd HH:mm:ss") : null,
                 players = playerDetails
             };
             
@@ -1019,7 +1361,7 @@ public class SlotTracker : BasePlugin
                     }
                     else
                     {
-                        Console.WriteLine($"[SlotTracker] API sync failed: {response.StatusCode}, {responseString}");
+                        //Console.WriteLine($"[SlotTracker] API sync failed: {response.StatusCode}, {responseString}");
                         
                         // Retry on certain HTTP errors
                         if (retryCount < 3 && (
@@ -1029,7 +1371,7 @@ public class SlotTracker : BasePlugin
                             response.StatusCode == System.Net.HttpStatusCode.GatewayTimeout
                         ))
                         {
-                            Console.WriteLine($"[SlotTracker] Retrying API sync in {1000 * (retryCount + 1)}ms...");
+                            //Console.WriteLine($"[SlotTracker] Retrying API sync in {1000 * (retryCount + 1)}ms...");
                             await Task.Delay(1000 * (retryCount + 1));
                             SyncDataWithApi(retryCount + 1);
                         }
@@ -1037,12 +1379,12 @@ public class SlotTracker : BasePlugin
                 }
                 catch (OperationCanceledException)
                 {
-                    Console.WriteLine("[SlotTracker] API request timed out");
+                    //Console.WriteLine("[SlotTracker] API request timed out");
                     
                     // Retry on timeout
                     if (retryCount < 3)
                     {
-                        Console.WriteLine($"[SlotTracker] Retrying API sync after timeout in {1000 * (retryCount + 1)}ms...");
+                        //Console.WriteLine($"[SlotTracker] Retrying API sync after timeout in {1000 * (retryCount + 1)}ms...");
                         await Task.Delay(1000 * (retryCount + 1));
                         SyncDataWithApi(retryCount + 1);
                     }
