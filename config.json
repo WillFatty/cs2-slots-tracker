@@ -1,8 +1,10 @@
 {
     "EnableApiSync": true,
-    "ApiEndpoint": "https://admin.affinitycs2.com/api/cs2",
+    "ApiEndpoint": "https://servers.affinitycs2.com/api/cs2",
     "ApiKey": "AffinityCS2APIKey2024",
     "ServerId": "server1",
     "ServerName": "",
+    "ServerIp": "24.101.101.161",
+    "ServerPort": 27015,
     "ApiSyncIntervalSeconds": 60
 }

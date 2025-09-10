@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("cs2-slots-tracker")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+484939d2471b988c6abfcacb308eb89eecde1ed9")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+07b7c7b9b56178f4914b0cb834f3638d8e37aa6d")]
 [assembly: System.Reflection.AssemblyProductAttribute("cs2-slots-tracker")]
 [assembly: System.Reflection.AssemblyTitleAttribute("cs2-slots-tracker")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
