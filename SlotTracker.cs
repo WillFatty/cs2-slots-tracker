@@ -37,6 +37,10 @@ public class SlotTracker : BasePlugin
     private List<PlayerInfo> _tPlayers = new List<PlayerInfo>();
     private List<PlayerInfo> _ctPlayers = new List<PlayerInfo>();
     
+    // Side switch tracking
+    private bool _sidesSwapped = false;
+    private int _lastTotalRounds = 0;
+    
     // Round timer tracking
     private DateTime _roundStartTime = DateTime.UtcNow;
     private int _roundTimeRemaining = 0;
@@ -109,6 +113,9 @@ public class SlotTracker : BasePlugin
         
         // Register command to check hibernation status
         AddCommand("css_hibernationcheck", "Check hibernation status and trigger if needed", CommandHibernationCheck);
+        
+        // Register command to check halftime status
+        AddCommand("css_halftime", "Check halftime and side switch status", CommandHalftime);
         
         // Add a timer to initialize when server is ready
         AddTimer(5.0f, () => OnServerReady());
@@ -351,6 +358,32 @@ public class SlotTracker : BasePlugin
             }
         }
     }
+
+    private void CommandHalftime(CCSPlayerController? player, CommandInfo command)
+    {
+        try
+        {
+            int totalRounds = _tRounds + _ctRounds;
+            var message = $"Halftime Status - T Rounds: {_tRounds}, CT Rounds: {_ctRounds}, Total: {totalRounds}, Sides Swapped: {_sidesSwapped}, Last Total: {_lastTotalRounds}";
+            
+            if (player != null)
+            {
+                player.PrintToChat($" \x04[SlotTracker]\x01 {message}");
+            }
+            else
+            {
+                //Console.WriteLine($"[SlotTracker] {message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SlotTracker] Error checking halftime status: {ex.Message}");
+            if (player != null)
+            {
+                player.PrintToChat(" \x02[SlotTracker]\x01 Error checking halftime status.");
+            }
+        }
+    }
     
     private void OnMapStart(string mapName)
     {
@@ -386,6 +419,10 @@ public class SlotTracker : BasePlugin
         _playerCount = 0;
         _tPlayers.Clear();
         _ctPlayers.Clear();
+        
+        // Reset side switch tracking
+        _sidesSwapped = false;
+        _lastTotalRounds = 0;
         
         // Reset round timer
         _roundInProgress = false;
@@ -750,6 +787,9 @@ public class SlotTracker : BasePlugin
                 //Console.WriteLine($"[SlotTracker] Unhandled winner team: {winnerTeam}");
             }
             
+            // Check for halftime/side switch
+            CheckForHalftime();
+            
             // Sync updated data
             RequestApiSync();
         }
@@ -771,6 +811,39 @@ public class SlotTracker : BasePlugin
             3 => "CT",
             _ => $"Unknown({teamNum})"
         };
+    }
+
+    private void CheckForHalftime()
+    {
+        try
+        {
+            int totalRounds = _tRounds + _ctRounds;
+            
+            // Detect halftime when we reach 12 rounds and haven't swapped sides yet
+            // In CS2 competitive matches, teams switch sides at halftime (after 12 rounds)
+            if (totalRounds == 12 && !_sidesSwapped && _lastTotalRounds < 12)
+            {
+                //Console.WriteLine($"[SlotTracker] Halftime detected! Swapping sides. Before: T={_tRounds}, CT={_ctRounds}");
+                
+                // Swap the round counts since teams are switching sides
+                int tempRounds = _tRounds;
+                _tRounds = _ctRounds;
+                _ctRounds = tempRounds;
+                
+                _sidesSwapped = true;
+                
+                //Console.WriteLine($"[SlotTracker] Sides swapped! After: T={_tRounds}, CT={_ctRounds}");
+                
+                // Update player lists to reflect the side switch
+                UpdatePlayerLists();
+            }
+            
+            _lastTotalRounds = totalRounds;
+        }
+        catch (Exception ex)
+        {
+            // Console.WriteLine($"[SlotTracker] Error checking for halftime: {ex.Message}");
+        }
     }
 
     private void RequestApiSync()
@@ -1183,6 +1256,10 @@ public class SlotTracker : BasePlugin
             // Reset rounds won
             _tRounds = 0;
             _ctRounds = 0;
+            
+            // Reset side switch tracking
+            _sidesSwapped = false;
+            _lastTotalRounds = 0;
             
             // Reset round timer
             _roundInProgress = false;
