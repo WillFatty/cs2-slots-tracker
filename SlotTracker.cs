@@ -52,6 +52,7 @@ public class SlotTracker : BasePlugin
     private DateTime _hibernationStartTime = DateTime.UtcNow;
     private int _hibernationCount = 0;
     private int _lastPlayerCount = 0;
+    private string _serverPassword = string.Empty;
 
     public class PlayerInfo
     {
@@ -103,19 +104,22 @@ public class SlotTracker : BasePlugin
         RegisterEventHandler<EventRoundMvp>(OnRoundMvp, HookMode.Post);
         
         // Register command to view team stats
-        AddCommand("css_teamstats", "Shows current team statistics", CommandTeamStats);
+        //AddCommand("css_teamstats", "Shows current team statistics", CommandTeamStats);
         
         // Register command to debug round timer
-        AddCommand("css_roundtimer", "Shows round timer debug information", CommandRoundTimer);
+        //AddCommand("css_roundtimer", "Shows round timer debug information", CommandRoundTimer);
         
         // Register command to manually trigger hibernation reset for testing
-        AddCommand("css_hibernation", "Manually trigger hibernation reset for testing", CommandHibernation);
+        //AddCommand("css_hibernation", "Manually trigger hibernation reset for testing", CommandHibernation);
         
         // Register command to check hibernation status
-        AddCommand("css_hibernationcheck", "Check hibernation status and trigger if needed", CommandHibernationCheck);
+        //AddCommand("css_hibernationcheck", "Check hibernation status and trigger if needed", CommandHibernationCheck);
         
         // Register command to check halftime status
-        AddCommand("css_halftime", "Check halftime and side switch status", CommandHalftime);
+        //AddCommand("css_halftime", "Check halftime and side switch status", CommandHalftime);
+        
+        // Register command to check server password
+        //AddCommand("css_serverpassword", "Check server password status", CommandServerPassword);
         
         // Add a timer to initialize when server is ready
         AddTimer(5.0f, () => OnServerReady());
@@ -182,6 +186,9 @@ public class SlotTracker : BasePlugin
             
             // Reset stats for new session
             ResetStats();
+            
+            // Update server password
+            UpdateServerPassword();
             
             // Start API sync timer after server is ready
             if (_config.EnableApiSync)
@@ -384,6 +391,45 @@ public class SlotTracker : BasePlugin
             }
         }
     }
+
+    private void CommandServerPassword(CCSPlayerController? player, CommandInfo command)
+    {
+        try
+        {
+            // Update server password before checking
+            UpdateServerPassword();
+            
+            var message = $"Server Password Status - Password: {(string.IsNullOrEmpty(_serverPassword) ? "Not Set" : "Set")}, Source: {(!string.IsNullOrEmpty(_config.ServerPassword) ? "Config" : "CVar")}";
+            
+            if (player != null)
+            {
+                player.PrintToChat($" \x04[SlotTracker]\x01 {message}");
+                
+                // Show password if set (for debugging - be careful in production)
+                if (!string.IsNullOrEmpty(_serverPassword))
+                {
+                    player.PrintToChat($" \x04[SlotTracker]\x01 Password: {_serverPassword}");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"[SlotTracker] {message}");
+                
+                if (!string.IsNullOrEmpty(_serverPassword))
+                {
+                    Console.WriteLine($"[SlotTracker] Password: {_serverPassword}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SlotTracker] Error checking server password: {ex.Message}");
+            if (player != null)
+            {
+                player.PrintToChat(" \x02[SlotTracker]\x01 Error checking server password.");
+            }
+        }
+    }
     
     private void OnMapStart(string mapName)
     {
@@ -405,6 +451,9 @@ public class SlotTracker : BasePlugin
             {
                 //Console.WriteLine($"[SlotTracker] Initial map load detected, skipping reset");
             }
+            
+            // Update server password on map change
+            UpdateServerPassword();
         }
         catch (Exception ex)
         {
@@ -842,7 +891,7 @@ public class SlotTracker : BasePlugin
         }
         catch (Exception ex)
         {
-            // Console.WriteLine($"[SlotTracker] Error checking for halftime: {ex.Message}");
+            Console.WriteLine($"[SlotTracker] Error checking for halftime: {ex.Message}");
         }
     }
 
@@ -1160,6 +1209,46 @@ public class SlotTracker : BasePlugin
         }
     }
 
+    private void UpdateServerPassword()
+    {
+        try
+        {
+            // First try to get from config
+            if (!string.IsNullOrEmpty(_config.ServerPassword))
+            {
+                _serverPassword = _config.ServerPassword;
+                return;
+            }
+
+            // Try to get from server CVar sv_password
+            var passwordCvar = ConVar.Find("sv_password");
+            if (passwordCvar != null)
+            {
+                var passwordValue = passwordCvar.StringValue;
+                if (!string.IsNullOrEmpty(passwordValue))
+                {
+                    _serverPassword = passwordValue;
+                    //Console.WriteLine($"[SlotTracker] Retrieved server password from CVar: {_serverPassword}");
+                }
+                else
+                {
+                    _serverPassword = ""; // No password set
+                    //Console.WriteLine("[SlotTracker] No server password set (sv_password is empty)");
+                }
+            }
+            else
+            {
+                //Console.WriteLine("[SlotTracker] Could not find sv_password CVar");
+                _serverPassword = "";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SlotTracker] Error getting server password: {ex.Message}");
+            _serverPassword = "";
+        }
+    }
+
     private void CheckForHibernation()
     {
         try
@@ -1335,6 +1424,9 @@ public class SlotTracker : BasePlugin
             // Console.WriteLine($"[SlotTracker] Starting API sync (attempt {retryCount + 1})...");
             // Console.WriteLine($"[SlotTracker] Current map for API sync: '{_currentMap}'");
             
+            // Update server password before each sync to ensure it's current
+            UpdateServerPassword();
+            
             // Ensure player lists are up to date (unless hibernating)
             if (!_isHibernating)
             {
@@ -1400,6 +1492,7 @@ public class SlotTracker : BasePlugin
                 server_name = _config.ServerName ?? "CS2 Server",
                 server_ip = _config.ServerIp ?? "127.0.0.1",
                 server_port = _config.ServerPort,
+                server_password = _serverPassword,
                 session_id = _sessionId,
                 timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
                 map_name = _currentMap ?? "unknown",

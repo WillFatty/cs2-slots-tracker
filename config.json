@@ -6,5 +6,6 @@
     "ServerName": "",
     "ServerIp": "24.101.101.161",
     "ServerPort": 27015,
+    "ServerPassword": "",
     "ApiSyncIntervalSeconds": 60
 }

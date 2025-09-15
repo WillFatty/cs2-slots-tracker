@@ -10,5 +10,6 @@ public class ServerConfig
     public string ServerName { get; init; } = "CS2 Server"; // Friendly name for the server
     public string ServerIp { get; init; } = "24.101.101.161"; // Server IP address
     public int ServerPort { get; init; } = 27015; // Server port
+    public string ServerPassword { get; init; } = ""; // Server password (sv_password)
     public int ApiSyncIntervalSeconds { get; init; } = 60; // How often to sync data with API
 } 

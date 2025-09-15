@@ -11,11 +11,13 @@ A Counter-Strike 2 plugin built with CounterStrikeSharp that tracks server playe
 - Detailed logging for troubleshooting
 - Team-based player tracking (T side and CT side)
 - In-game team statistics command
+- Server password status command for debugging
 - Map tracking in server statistics
 - Round win tracking for T and CT teams
 - Team round stats displayed in stats command
 - Stats automatically reset on map change and server start
 - Configurable API endpoints and server identifiers
+- Server password tracking and transmission to API
 
 ## Prerequisites
 
@@ -44,6 +46,9 @@ Edit the `config.json` file with your API settings:
     "ApiKey": "YOUR_API_KEY",
     "ServerId": "server1",
     "ServerName": "CS2 Server #1",
+    "ServerIp": "24.101.101.161",
+    "ServerPort": 27015,
+    "ServerPassword": "",
     "ApiSyncIntervalSeconds": 60
 }
 ```
@@ -54,7 +59,21 @@ Edit the `config.json` file with your API settings:
 - `ApiKey`: Your authentication key for the API
 - `ServerId`: A unique identifier for this server instance
 - `ServerName`: A friendly name for the server that appears in dashboards
-- `ApiSyncIntervalSeconds`: How often to send data to the API (in seconds)
+- `ServerIp`: The IP address of the server
+- `ServerPort`: The port number of the server
+- `ServerPassword`: Server password (optional - if empty, will try to get from sv_password CVar)
+- `ApiSyncIntervalSeconds`: How often to sync data with the API (in seconds)
+
+## Available Commands
+
+The plugin provides several in-game commands for debugging and monitoring:
+
+- `css_teamstats` - Shows current team statistics and player counts
+- `css_roundtimer` - Shows round timer debug information
+- `css_hibernation` - Manually trigger hibernation reset for testing
+- `css_hibernationcheck` - Check hibernation status and trigger if needed
+- `css_halftime` - Check halftime and side switch status
+- `css_serverpassword` - Check server password status and source
 
 ## Building from Source
 
